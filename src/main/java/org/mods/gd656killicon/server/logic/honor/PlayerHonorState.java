@@ -55,9 +55,11 @@ public final class PlayerHonorState {
         /** 快枪手: 上次击杀的武器标识与时刻(死亡 reset 清 0)。 */
         private String lastKillWeapon = null;
         private long lastKillTime = 0L;
-        /** 跳机火箭筒: 跳出空中载具的实体 id(0 = 未跳出)与跳出后是否已摧毁另一架空中载具。 */
+        /** 跳机火箭筒: 跳出空中载具的实体 id(0 = 未跳出)与跳出后是否已摧毁另一架空中载具, 及两阶段时间戳(0 = 未记录)。 */
         private int bailVehicleEntityId = 0;
         private boolean bailAirDestroyed = false;
+        private long bailOutTimeMs = 0L;
+        private long bailAirDestroyedTimeMs = 0L;
 
         public boolean isAchieved(String honorId) {
             return achieved.contains(honorId);
@@ -124,18 +126,31 @@ public final class PlayerHonorState {
             return bailAirDestroyed;
         }
 
+        public long getBailOutTimeMs() {
+            return bailOutTimeMs;
+        }
+
+        public long getBailAirDestroyedTimeMs() {
+            return bailAirDestroyedTimeMs;
+        }
+
         public void markBailOut(int vehicleEntityId) {
             bailVehicleEntityId = vehicleEntityId;
             bailAirDestroyed = false;
+            bailOutTimeMs = System.currentTimeMillis();
+            bailAirDestroyedTimeMs = 0L;
         }
 
         public void markBailAirDestroyed() {
             bailAirDestroyed = true;
+            bailAirDestroyedTimeMs = System.currentTimeMillis();
         }
 
         public void clearBail() {
             bailVehicleEntityId = 0;
             bailAirDestroyed = false;
+            bailOutTimeMs = 0L;
+            bailAirDestroyedTimeMs = 0L;
         }
 
         /**

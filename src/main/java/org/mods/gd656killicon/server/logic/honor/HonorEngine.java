@@ -25,6 +25,10 @@ import java.util.UUID;
  */
 public final class HonorEngine {
 
+    /** 跳机火箭筒: 跳出空载后摧毁另一架空载的窗口(毫秒)与摧毁后返回原载具的窗口(毫秒)。 */
+    private static final long BAIL_DESTROY_WINDOW_MS = 10_000L;
+    private static final long BAIL_RETURN_WINDOW_MS = 10_000L;
+
     private final PlayerHonorState.Store states = new PlayerHonorState.Store();
     /** 对局级(Conquest 单次对局)状态: 跨玩家登出保留, 对局结束(onRoundEnd)清空。 */
     private final java.util.Map<java.util.UUID, Integer> roundDestroyCounts = new java.util.concurrent.ConcurrentHashMap<>();
@@ -420,6 +424,11 @@ public final class HonorEngine {
         if (life.getBailVehicleEntityId() == 0 || life.isBailAirDestroyed()) {
             return;
         }
+        // 离开空载后 10 秒内未摧毁另一架空载 → 流程终止
+        if (System.currentTimeMillis() - life.getBailOutTimeMs() > BAIL_DESTROY_WINDOW_MS) {
+            life.clearBail();
+            return;
+        }
         if (victimEntityId == life.getBailVehicleEntityId()) {
             return; // 摧毁的是原载具不算
         }
@@ -436,6 +445,11 @@ public final class HonorEngine {
         }
         PlayerHonorState.LifeSegment life = states.getOrCreate(player.getUUID()).life();
         if (life.getBailVehicleEntityId() == 0 || !life.isBailAirDestroyed()) {
+            return;
+        }
+        // 摧毁空载后 10 秒内未返回原载具 → 流程终止
+        if (System.currentTimeMillis() - life.getBailAirDestroyedTimeMs() > BAIL_RETURN_WINDOW_MS) {
+            life.clearBail();
             return;
         }
         if (vehicle.getId() != life.getBailVehicleEntityId()) {

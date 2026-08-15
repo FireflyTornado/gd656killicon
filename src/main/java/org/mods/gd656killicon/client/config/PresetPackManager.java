@@ -134,7 +134,10 @@ public class PresetPackManager {
             if (presetJson.has("elements")) {
                 JsonObject elements = presetJson.getAsJsonObject("elements");
                 for (String key : elements.keySet()) {
-                    preset.addElementConfig(key, elements.getAsJsonObject(key));
+                    JsonObject config = elements.getAsJsonObject(key);
+                    // GD656Mods: 导入时自动补全缺失配置项(旧版本导出缺少的新键用当前注册表默认值补齐)
+                    ElementConfigManager.completeMissingKeys(targetId, key, config);
+                    preset.addElementConfig(key, config);
                 }
             }
             

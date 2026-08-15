@@ -356,14 +356,36 @@ public class ElementConfigManager {
         }
     }
 
+    /**
+     * 补全元素配置中缺失的键: 用当前注册表默认值补齐(某次更新新增的配置项自动出现, 避免配置界面不显示)。
+     * 游戏启动(normalizePresets)与导入预设(PresetPackManager)复用此入口。
+     * 未知元素(注册表无默认)保留玩家数据, 不做任何处理。
+     *
+     * @return 本次补全的键集合(空 = 无缺失键)。
+     */
+    public static Set<String> completeMissingKeys(String presetId, String elementId, JsonObject config) {
+        if (config == null) {
+            return Collections.emptySet();
+        }
+        JsonObject defaults = getDefaultElementConfig(presetId, elementId);
+        if (defaults.entrySet().isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> completed = new HashSet<>();
+        for (Map.Entry<String, com.google.gson.JsonElement> defaultEntry : defaults.entrySet()) {
+            if (!config.has(defaultEntry.getKey())) {
+                config.add(defaultEntry.getKey(), defaultEntry.getValue().deepCopy());
+                completed.add(defaultEntry.getKey());
+            }
+        }
+        return completed;
+    }
+
     private static boolean normalizePresets() {
         boolean changed = false;
         for (Map.Entry<String, ElementPreset> presetEntry : PRESETS.entrySet()) {
             String presetId = presetEntry.getKey();
-            // 官方预设 = jar 资源唯一数据源(完整快照), 不做默认键修正, 仅处理用户/自定义预设
-            if (isOfficialPreset(presetId)) {
-                continue;
-            }
+            // 官方/自定义预设统一补全缺失键(注册表键为权威; jar 快照已有键值不受影响)。
             ElementPreset preset = presetEntry.getValue();
             for (Map.Entry<String, JsonObject> elementEntry : preset.elementConfigs.entrySet()) {
                 String elementId = elementEntry.getKey();
@@ -372,19 +394,11 @@ public class ElementConfigManager {
                 if ("kill_icon/valorant".equals(elementId)) {
                     changed |= migrateValorantConfig(presetId, config);
                 }
-                
-                JsonObject safeDefaults = getDefaultElementConfig(presetId, elementId);
-                
-                if (safeDefaults.entrySet().isEmpty()) {
-                    // 未知元素: 保留玩家数据, 不删除(避免静默丢数据)
-                    continue;
-                }
 
-                for (Map.Entry<String, com.google.gson.JsonElement> defaultEntry : safeDefaults.entrySet()) {
-                    String key = defaultEntry.getKey();
-                    if (!config.has(key)) {
-                        config.add(key, defaultEntry.getValue());
-                        changed = true;
+                Set<String> completed = completeMissingKeys(presetId, elementId, config);
+                if (!completed.isEmpty()) {
+                    changed = true;
+                    for (String key : completed) {
                         ClientMessageLogger.chatWarn("gd656killicon.client.config.element.restored_missing", presetId, elementId, key);
                     }
                 }

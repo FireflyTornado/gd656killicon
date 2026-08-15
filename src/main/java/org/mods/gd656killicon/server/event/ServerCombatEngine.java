@@ -62,6 +62,9 @@ public final class ServerCombatEngine {
     private static final double HOLD_POSITION_MAX_DISTANCE = 1.0;
     private static final long FIRE_ATTRIBUTION_TIMEOUT_MS = 15000;
     private static final long SCOREBOARD_REFRESH_INTERVAL_MS = 60000L;
+    /** 血偿时间窗: 杀死玩家的是玩家 30 秒, 是生物 240 秒(毫秒)。 */
+    private static final long AVENGE_PLAYER_WINDOW_MS = 30_000L;
+    private static final long AVENGE_MOB_WINDOW_MS = 240_000L;
 
     private static long nextScoreboardRefreshAt = 0L;
 
@@ -564,8 +567,14 @@ public final class ServerCombatEngine {
         int bonusType = mapKillTypeToBonus(killType, pk.damageType);
 
         // 复仇判定(awardStreakKills 会移除 history, 需在加分项判定前计算, 荣誉与加分项共用)
+        // 时间窗: 杀死玩家的是玩家 30 秒内反杀, 是生物 240 秒内反杀
         Map<UUID, Long> avengeHistory = killHistory.get(pk.player.getUUID());
-        boolean isAvenge = avengeHistory != null && avengeHistory.containsKey(pk.victimId);
+        boolean isAvenge = false;
+        if (avengeHistory != null) {
+            Long killedAt = avengeHistory.get(pk.victimId);
+            long avengeWindowMs = pk.isVictimPlayer ? AVENGE_PLAYER_WINDOW_MS : AVENGE_MOB_WINDOW_MS;
+            isAvenge = killedAt != null && System.currentTimeMillis() - killedAt <= avengeWindowMs;
+        }
 
         addBonus(pk.player, bonusType, pk.maxHealth, "", pk.victimIdInt, finalVictimName);
         awardSpecialKills(pk);
@@ -597,11 +606,7 @@ public final class ServerCombatEngine {
         if (isInGarrisonKillSituation(pk.player)) {
             ServerCore.HONOR.onGarrisonKill(pk.player);
         }
-        // 急先锋: Conquest 对局中该阵营(CAMP_A/CAMP_B)第一个击杀者
-        String firstKillKey = resolveFirstKillTeamKey(pk.player);
-        if (firstKillKey != null) {
-            ServerCore.HONOR.onFirstKill(pk.player, firstKillKey);
-        }
+        // 急先锋: 由 Conquest 在对局内击杀事件中经 KilliconHonorBridge 触发(原 killicon 侧反射判定已移除)
         // 战士: 行走或疾跑 = 水平移动中(非静止; 速度或移动输入, 防止击杀瞬间速度归零)
         boolean isMoving = isPlayerWalkingOrSprinting(pk.player);
         ServerCore.HONOR.onKill(pk.player, victimEntity, killType == org.mods.gd656killicon.common.KillType.HEADSHOT,
@@ -719,9 +724,13 @@ public final class ServerCombatEngine {
         awardLifeKillMilestone(pk.player, lifeKills);
 
         Map<UUID, Long> history = killHistory.get(pk.player.getUUID());
-        if (history != null && history.containsKey(pk.victimId)) {
-            addBonus(pk.player, BonusType.AVENGE, 1.0f, "");
-            history.remove(pk.victimId);
+        if (history != null) {
+            Long killedAt = history.get(pk.victimId);
+            long avengeWindowMs = pk.isVictimPlayer ? AVENGE_PLAYER_WINDOW_MS : AVENGE_MOB_WINDOW_MS;
+            if (killedAt != null && System.currentTimeMillis() - killedAt <= avengeWindowMs) {
+                addBonus(pk.player, BonusType.AVENGE, 1.0f, "");
+                history.remove(pk.victimId);
+            }
         }
 
         if (pk.streakCount >= 5) {
@@ -1016,60 +1025,6 @@ public final class ServerCombatEngine {
     private static java.lang.reflect.Method garrisonCoreServiceMethod;
     private static java.lang.reflect.Method garrisonFindRoomMethod;
     private static java.lang.reflect.Method garrisonSnapshotMethod;
-    private static java.lang.reflect.Method garrisonFindRunningMethod;
-
-    /**
-     * 急先锋判定: 玩家在 Conquest RUNNING 对局中的**小队**(阵营内 squad, 非整个阵营), 返回 roomId:squadLabel;
-     * 不在对局/无小队返回 null。复用戍卫反射链, 用 buildKilliconConquestSnapshot 非空验证对局已开始(RUNNING)。
-     */
-    private static String resolveFirstKillTeamKey(ServerPlayer killer) {
-        if (killer == null || killer.server == null) {
-            return null;
-        }
-        try {
-            if (garrisonMgrOfMethod == null) {
-                Class<?> mgrClass = Class.forName("org.mods.gd656conquest.server.room.entry.RoomCoreRuntimeManager");
-                garrisonMgrOfMethod = mgrClass.getMethod("of", net.minecraft.server.MinecraftServer.class);
-                garrisonCoreServiceMethod = mgrClass.getMethod("coreService");
-                Class<?> coreServiceClass = Class.forName("org.mods.gd656conquest.server.room.core.RoomCoreService");
-                garrisonFindRoomMethod = coreServiceClass.getMethod("findPlayerRoomId", java.util.UUID.class);
-                garrisonSnapshotMethod = coreServiceClass.getMethod("buildKilliconConquestSnapshot", String.class);
-                garrisonFindRunningMethod = coreServiceClass.getMethod("findRunningState", String.class);
-                garrisonReady = true;
-            }
-            if (!garrisonReady) {
-                return null;
-            }
-            Object mgr = garrisonMgrOfMethod.invoke(null, killer.server);
-            Object coreService = garrisonCoreServiceMethod.invoke(mgr);
-            Object roomOpt = garrisonFindRoomMethod.invoke(coreService, killer.getUUID());
-            if (!(roomOpt instanceof java.util.Optional<?> optional) || optional.isEmpty()) {
-                return null;
-            }
-            String roomId = (String) optional.get();
-            // 对局未开始(RUNNING 之外)时快照为空
-            Object snapshot = garrisonSnapshotMethod.invoke(coreService, roomId);
-            if (!(snapshot instanceof java.util.Map<?, ?> snapshotMap) || snapshotMap.isEmpty()) {
-                return null;
-            }
-            // 玩家小队: findRunningState(roomId).getSquadLabelsByPlayer()
-            Object runningOpt = garrisonFindRunningMethod.invoke(coreService, roomId);
-            if (!(runningOpt instanceof java.util.Optional<?> runningOptional) || runningOptional.isEmpty()) {
-                return null;
-            }
-            Object runningState = runningOptional.get();
-            Object squadMap = runningState.getClass().getMethod("getSquadLabelsByPlayer").invoke(runningState);
-            if (squadMap instanceof java.util.Map<?, ?> squadLabels) {
-                Object label = squadLabels.get(killer.getUUID());
-                if (label instanceof String squadLabel && !squadLabel.isBlank()) {
-                    return roomId + ":" + squadLabel;
-                }
-            }
-            return null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     /**
      * 炮手判定: 玩家在载具内且**不在主驾驶位**(基于 SBW/YWZJ 数据):
