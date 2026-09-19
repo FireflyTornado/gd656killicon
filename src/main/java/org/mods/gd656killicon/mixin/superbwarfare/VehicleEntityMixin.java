@@ -20,12 +20,14 @@ public abstract class VehicleEntityMixin {
     @Shadow
     public abstract float getHealth();
 
-    @Inject(method = "hurt", at = @At("HEAD"))
+    // 方法名同时写 dev(Mojmap: hurt) 与 prod(SRG: m_6469_) 两个名字,
+    // 服务器上发布 jar 的 VehicleEntity.hurt 已被重映射为 m_6469_(remap=false 按字面匹配)
+    @Inject(method = {"hurt", "m_6469_"}, at = @At("HEAD"))
     private void gd656killicon$capturePreDamage(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         gd656killicon$healthBeforeHurt = this.getHealth();
     }
 
-    @Inject(method = "hurt", at = @At("RETURN"))
+    @Inject(method = {"hurt", "m_6469_"}, at = @At("RETURN"))
     private void gd656killicon$recordActualVehicleDamage(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         if (!cir.getReturnValueZ()) {
             return;
