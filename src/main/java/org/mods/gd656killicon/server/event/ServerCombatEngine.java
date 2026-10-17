@@ -173,6 +173,7 @@ public final class ServerCombatEngine {
     public static void onPlayerLogout(ServerPlayer player) {
         if (player == null) return;
         UUID playerId = player.getUUID();
+        PlayerDataManager.get().clearScoreboardSnapshot(playerId);
         PlayerDataManager.get().forceSave(playerId);
         lastSprintPositions.remove(playerId);
         sprintDistances.remove(playerId);
