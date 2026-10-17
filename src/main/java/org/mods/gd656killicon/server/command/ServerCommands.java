@@ -89,6 +89,12 @@ public class ServerCommands {
                             .executes(c -> setAssistboardDisplayName(c, StringArgumentType.getString(c, "name")))))
                         .then(Commands.literal("NeutralVehicleSkip").then(Commands.argument("val", BoolArgumentType.bool())
                             .executes(c -> setNeutralVehicleSkip(c, BoolArgumentType.getBool(c, "val")))))
+                        .then(Commands.literal("PlayerFilterEnabled").then(Commands.argument("val", BoolArgumentType.bool())
+                            .executes(c -> setPlayerFilterEnabled(c, BoolArgumentType.getBool(c, "val")))))
+                        .then(Commands.literal("PlayerFilterDays").then(Commands.argument("days", IntegerArgumentType.integer(1))
+                            .executes(c -> setPlayerFilterDays(c, IntegerArgumentType.getInteger(c, "days")))))
+                        .then(Commands.literal("UnknownPlayerRetentionDays").then(Commands.argument("days", IntegerArgumentType.integer(1))
+                            .executes(c -> setUnknownPlayerRetentionDays(c, IntegerArgumentType.getInteger(c, "days")))))
                     )
                 .then(Commands.literal("statistics")
                     .then(Commands.literal("get").then(Commands.literal("score")
@@ -440,6 +446,24 @@ public class ServerCommands {
     private static int setNeutralVehicleSkip(CommandContext<CommandSourceStack> c, boolean val) {
         ServerData.get().setNeutralVehicleSkip(val);
         ServerLog.sendSuccess(c.getSource(), "gd656killicon.server.command.neutral_vehicle_skip_set", val);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int setPlayerFilterEnabled(CommandContext<CommandSourceStack> c, boolean value) {
+        ServerData.get().setPlayerFilterEnabled(value);
+        ServerLog.sendSuccess(c.getSource(), "gd656killicon.server.command.player_filter_enabled_set", value);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int setPlayerFilterDays(CommandContext<CommandSourceStack> c, int days) {
+        ServerData.get().setPlayerFilterDays(days);
+        ServerLog.sendSuccess(c.getSource(), "gd656killicon.server.command.player_filter_days_set", days);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int setUnknownPlayerRetentionDays(CommandContext<CommandSourceStack> c, int days) {
+        ServerData.get().setUnknownPlayerRetentionDays(days);
+        ServerLog.sendSuccess(c.getSource(), "gd656killicon.server.command.unknown_player_retention_days_set", days);
         return Command.SINGLE_SUCCESS;
     }
 

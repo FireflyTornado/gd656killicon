@@ -1576,5 +1576,14 @@
   "gd656killicon.server.prefix": "[六五六-服務端] ",
   "key.categories.gd656killicon": "GD656殺圖",
   "key.gd656killicon.open_config": "啟設",
-  "key.gd656killicon.open_scoreboard": "閱計分板"
+  "key.gd656killicon.open_scoreboard": "閱計分板",
+  "gd656killicon.client.gui.help.command.config.player_filter_enabled.title": "篩人開關",
+  "gd656killicon.client.gui.help.command.config.player_filter_enabled.desc": "/gd656killicon server config PlayerFilterEnabled <true|false>\n總榜篩離線者，預設開。",
+  "gd656killicon.server.command.player_filter_enabled_set": "已設篩人開關: %s",
+  "gd656killicon.client.gui.help.command.config.player_filter_days.title": "離線保留日數",
+  "gd656killicon.client.gui.help.command.config.player_filter_days.desc": "/gd656killicon server config PlayerFilterDays <days>\n離線逾期則隱，預設三十日，不刪其錄。",
+  "gd656killicon.server.command.player_filter_days_set": "已設離線保留: %s d",
+  "gd656killicon.client.gui.help.command.config.unknown_player_retention_days.title": "未知者保留日數",
+  "gd656killicon.client.gui.help.command.config.unknown_player_retention_days.desc": "/gd656killicon server config UnknownPlayerRetentionDays <days>\n未知者預設留五日；改其日數，皆重新起算。",
+  "gd656killicon.server.command.unknown_player_retention_days_set": "已設未知者保留: %s d，依變更重計其期"
 }

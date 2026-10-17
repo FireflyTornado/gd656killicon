@@ -1576,5 +1576,14 @@
   "gd656killicon.server.prefix": "[656-Server] ",
   "key.categories.gd656killicon": "GD656Killicon",
   "key.gd656killicon.open_config": "Open Configuration",
-  "key.gd656killicon.open_scoreboard": "View Scoreboard"
+  "key.gd656killicon.open_scoreboard": "View Scoreboard",
+  "gd656killicon.client.gui.help.command.config.player_filter_enabled.title": "Player filtering",
+  "gd656killicon.client.gui.help.command.config.player_filter_enabled.desc": "/gd656killicon server config PlayerFilterEnabled <true|false>\nToggle offline player filtering in the total scoreboard; enabled by default.",
+  "gd656killicon.server.command.player_filter_enabled_set": "Player filtering set to: %s",
+  "gd656killicon.client.gui.help.command.config.player_filter_days.title": "Offline retention",
+  "gd656killicon.client.gui.help.command.config.player_filter_days.desc": "/gd656killicon server config PlayerFilterDays <days>\nSet offline retention in days (default 30). Players are hidden without deleting data.",
+  "gd656killicon.server.command.player_filter_days_set": "Offline player retention set to: %s d",
+  "gd656killicon.client.gui.help.command.config.unknown_player_retention_days.title": "Unknown player retention",
+  "gd656killicon.client.gui.help.command.config.unknown_player_retention_days.desc": "/gd656killicon server config UnknownPlayerRetentionDays <days>\nSet unknown player retention in days (default 5). Changing this value restarts all unknown grace periods.",
+  "gd656killicon.server.command.unknown_player_retention_days_set": "Unknown player retention set to: %s d; grace periods updated if changed"
 }

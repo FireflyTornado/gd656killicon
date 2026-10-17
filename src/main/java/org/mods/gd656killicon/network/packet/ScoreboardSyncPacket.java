@@ -78,7 +78,9 @@ public class ScoreboardSyncPacket implements IPacket {
                 buffer.readInt(),
                 buffer.readInt(),
                 buffer.readBoolean(),
-                buffer.readBoolean()             ));
+                buffer.readBoolean(),
+                buffer.readLong(),
+                buffer.readLong()));
         }
     }
 
@@ -112,6 +114,8 @@ public class ScoreboardSyncPacket implements IPacket {
             buffer.writeInt(entry.ping);
             buffer.writeBoolean(entry.online);
             buffer.writeBoolean(entry.spectator);
+            buffer.writeLong(entry.offlineDurationMillis);
+            buffer.writeLong(entry.unknownRemainingMillis);
         }
     }
 
@@ -147,8 +151,17 @@ public class ScoreboardSyncPacket implements IPacket {
         public final int ping;
         public final boolean online;
         public final boolean spectator;
+        public final long offlineDurationMillis;
+        public final long unknownRemainingMillis;
 
         public Entry(UUID uuid, String name, String lastLoginName, String teamName, String squadLabel, int score, int kill, int death, int assist, int revive, int ping, boolean online, boolean spectator) {
+            this(uuid, name, lastLoginName, teamName, squadLabel, score, kill, death, assist, revive,
+                ping, online, spectator, -1L, -1L);
+        }
+
+        public Entry(UUID uuid, String name, String lastLoginName, String teamName, String squadLabel,
+                     int score, int kill, int death, int assist, int revive, int ping, boolean online,
+                     boolean spectator, long offlineDurationMillis, long unknownRemainingMillis) {
             this.uuid = uuid;
             this.name = name;
             this.lastLoginName = lastLoginName;
@@ -162,6 +175,8 @@ public class ScoreboardSyncPacket implements IPacket {
             this.ping = ping;
             this.online = online;
             this.spectator = spectator;
+            this.offlineDurationMillis = offlineDurationMillis;
+            this.unknownRemainingMillis = unknownRemainingMillis;
         }
     }
 }

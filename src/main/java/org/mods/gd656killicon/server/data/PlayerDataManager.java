@@ -45,6 +45,10 @@ public class PlayerDataManager {
     private Path playerdataDir;
     private ScheduledExecutorService autoSaveExecutor;
     private boolean initialized = false;
+    private PlayerPresenceStore presenceStore;
+    private PlayerPresenceLedger.Policy presencePolicy;
+    private long presenceCalculatedAt;
+    private long nextPresenceRefreshAt;
 
     private PlayerDataManager() {
         this.playerDataCache = new ConcurrentHashMap<>();
@@ -76,12 +80,23 @@ public class PlayerDataManager {
         }
 
         loadAllPlayerData();
+        try {
+            PlayerPresenceStore store = new PlayerPresenceStore(root.resolve("player_presence.json"));
+            store.load();
+            presenceStore = store;
+            refreshPlayerPresence(server, System.currentTimeMillis());
+        } catch (IOException exception) {
+            // Preserve an unreadable ledger instead of replacing it with guessed timestamps.
+            presenceStore = null;
+            ServerLog.error("Failed to load player presence: %s", exception.getMessage());
+        }
         rebuildGlobalBestByHonor();
         startAutoSaveTask();
         initialized = true;
     }
 
     public void shutdown() {
+        savePlayerPresence();
         scoreboardSnapshots.clear();
         nextScoreboardSnapshotCleanupAt = 0L;
         if (autoSaveExecutor != null) {
@@ -96,6 +111,8 @@ public class PlayerDataManager {
             }
         }
         saveAllPlayerData();
+        presenceStore = null;
+        presencePolicy = null;
         playerDataCache.clear();
         dirtyPlayers.clear();
         pendingRemovalPlayers.clear();
@@ -177,7 +194,12 @@ public class PlayerDataManager {
 
         Set<UUID> removalSnapshot = new HashSet<>(pendingRemovalPlayers);
         for (UUID uuid : removalSnapshot) {
-            removePlayerData(uuid);
+            if (hasPresenceRecord(uuid)) {
+                // A minute update may have registered this player after removal was queued.
+                savePlayerData(uuid);
+            } else {
+                removePlayerData(uuid);
+            }
         }
     }
 
@@ -589,18 +611,100 @@ public class PlayerDataManager {
         scoreboardSnapshots.remove(playerId);
     }
 
+    public void tickPlayerPresence(MinecraftServer server) {
+        long now = System.currentTimeMillis();
+        if (initialized && presenceStore != null && now >= nextPresenceRefreshAt && server != null) {
+            if (ServerData.get().reloadPlayerFilterConfig()) {
+                scoreboardSnapshots.clear();
+            }
+            refreshPlayerPresence(server, now);
+        }
+    }
+
+    private void refreshPlayerPresence(MinecraftServer server, long now) {
+        ServerData config = ServerData.get();
+        presencePolicy = new PlayerPresenceLedger.Policy(config.isPlayerFilterEnabled(),
+            config.getPlayerFilterDays(), config.getUnknownPlayerRetentionDays());
+        PlayerPresenceLedger ledger = presenceStore.ledger();
+        ledger.register(playerDataCache.keySet(), now);
+        ledger.applyUnknownRetentionDays(presencePolicy.unknownDays(), now);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            ledger.recordOnline(player.getUUID(), now);
+        }
+        presenceCalculatedAt = now;
+        nextPresenceRefreshAt = now + 60_000L;
+        savePlayerPresence();
+    }
+
+    public void recordPlayerLastOnline(UUID playerId) {
+        if (presenceStore != null) {
+            long now = System.currentTimeMillis();
+            presenceStore.ledger().recordOnline(playerId, now);
+            presenceCalculatedAt = now;
+            savePlayerPresence();
+        }
+    }
+
+    public void recordOnlinePlayers(MinecraftServer server) {
+        if (presenceStore != null && server != null) {
+            long now = System.currentTimeMillis();
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                presenceStore.ledger().recordOnline(player.getUUID(), now);
+            }
+            savePlayerPresence();
+        }
+    }
+
+    private void savePlayerPresence() {
+        if (presenceStore != null) {
+            try {
+                presenceStore.save();
+            } catch (IOException exception) {
+                ServerLog.error("Failed to save player presence: %s", exception.getMessage());
+            }
+        }
+    }
+
+    public void onPlayerFilterConfigChanged() {
+        scoreboardSnapshots.clear();
+        MinecraftServer server = org.mods.gd656killicon.server.bridge.ServerBridge.loader().getCurrentServer();
+        if (initialized && presenceStore != null && server != null) {
+            refreshPlayerPresence(server, System.currentTimeMillis());
+        }
+    }
+
+    private List<ScoreboardSyncPacket.Entry> prepareTotalScoreboardEntries(List<ScoreboardSyncPacket.Entry> source, MinecraftServer server) {
+        tickPlayerPresence(server);
+        if (presenceStore == null) {
+            return source;
+        }
+        List<ScoreboardSyncPacket.Entry> result = new ArrayList<>();
+        for (ScoreboardSyncPacket.Entry entry : source) {
+            PlayerPresenceLedger.View view = presenceStore.ledger().view(entry.uuid, entry.online, presencePolicy, presenceCalculatedAt);
+            if (view.visible()) {
+                result.add(new ScoreboardSyncPacket.Entry(entry.uuid, entry.name, entry.lastLoginName,
+                    entry.teamName, entry.squadLabel, entry.score, entry.kill, entry.death, entry.assist,
+                    entry.revive, entry.ping, entry.online, entry.spectator,
+                    view.offlineDurationMillis(), view.unknownRemainingMillis()));
+            }
+        }
+        return result;
+    }
+
     private ResolvedScoreboardData resolveScoreboardData(ServerPlayer requester) {
         ConquestScoreboardAdapter.Result conquestResult = ConquestScoreboardAdapter.resolve(requester);
         if (conquestResult != null) {
             return new ResolvedScoreboardData(
-                buildPrioritizedEntries(requester, new ArrayList<>(conquestResult.entries())),
+                buildPrioritizedEntries(requester, conquestResult.type() == ScoreboardType.TOTAL
+                    ? prepareTotalScoreboardEntries(conquestResult.entries(), requester.server)
+                    : new ArrayList<>(conquestResult.entries())),
                 conquestResult.columns(),
                 conquestResult.panelTeams(),
                 conquestResult.type()
             );
         }
         return new ResolvedScoreboardData(
-            buildPrioritizedEntries(requester, buildScoreboardEntries(requester.server)),
+            buildPrioritizedEntries(requester, prepareTotalScoreboardEntries(buildScoreboardEntries(requester.server), requester.server)),
             1,
             DEFAULT_PANEL_TEAMS,
             ScoreboardType.TOTAL
@@ -718,7 +822,13 @@ public class PlayerDataManager {
             || playerData.getDeath() > 0
             || playerData.getAssist() > 0
             || playerData.getRevive() > 0
-            || playerData.hasAnyHonor();
+            || playerData.hasAnyHonor()
+            || hasPresenceRecord(playerData.getUUID());
+    }
+
+    private boolean hasPresenceRecord(UUID playerId) {
+        PlayerPresenceStore current = presenceStore;
+        return current != null && current.ledger().contains(playerId);
     }
 
     private record ResolvedScoreboardData(List<ScoreboardSyncPacket.Entry> entries, int columns, String[] panelTeams, ScoreboardType type) {

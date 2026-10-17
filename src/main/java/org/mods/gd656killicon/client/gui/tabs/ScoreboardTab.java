@@ -7,6 +7,7 @@ import net.minecraft.client.resources.language.I18n;
 import org.mods.gd656killicon.client.cache.LocalLeaderboardCache;
 import org.mods.gd656killicon.client.cache.ScoreboardPageState;
 import org.mods.gd656killicon.common.scoreboard.ScoreboardType;
+import org.mods.gd656killicon.common.scoreboard.OfflineTimeDisplay;
 import org.mods.gd656killicon.client.config.ClientConfigManager;
 import org.mods.gd656killicon.client.config.ScoreboardLoadoutConfigManager;
 import org.mods.gd656killicon.client.gui.GuiConstants;
@@ -1002,7 +1003,11 @@ public class ScoreboardTab extends ConfigTabContent {
             renderer.addColumn(toStyledText(String.valueOf(entry.revive), italic), layout.reviveWidth, rowTextColor, false, true);
         }
         
-        renderer.addColoredColumn(formatPing(ping), layout.pingWidth, true, true);
+        List<GDTextRenderer.ColoredText> latencyText = scoreboardType == ScoreboardType.TOTAL && !entry.online
+            ? List.of(new GDTextRenderer.ColoredText(
+                OfflineTimeDisplay.format(entry.offlineDurationMillis, entry.unknownRemainingMillis), GuiConstants.COLOR_GRAY))
+            : formatPing(ping);
+        renderer.addColoredColumn(latencyText, layout.pingWidth, true, true);
 
         renderer.render(guiGraphics, mouseX, mouseY, partialTick);
     }
@@ -1161,6 +1166,12 @@ public class ScoreboardTab extends ConfigTabContent {
         SortType sortType = panelSortType[panelIndex];
         boolean ascending = panelSortAscending[panelIndex];
         list.sort((a, b) -> {
+            if (sortType == SortType.PING && scoreboardType == ScoreboardType.TOTAL) {
+                int group = Integer.compare(latencyGroup(a), latencyGroup(b));
+                if (group != 0) {
+                    return group;
+                }
+            }
             int result = switch (sortType) {
                 case NAME -> {
                     String nameA = a.lastLoginName != null ? a.lastLoginName : a.name;
@@ -1172,7 +1183,9 @@ public class ScoreboardTab extends ConfigTabContent {
                 case DEATH -> Integer.compare(a.death, b.death);
                 case ASSIST -> Integer.compare(a.assist, b.assist);
                 case REVIVE -> Integer.compare(a.revive, b.revive);
-                case PING -> Integer.compare(resolvePing(a), resolvePing(b));
+                case PING -> scoreboardType == ScoreboardType.TOTAL
+                    ? Long.compare(latencySortValue(a), latencySortValue(b))
+                    : Integer.compare(resolvePing(a), resolvePing(b));
             };
             if (result == 0) {
                 result = a.uuid.compareTo(b.uuid);
@@ -1180,6 +1193,14 @@ public class ScoreboardTab extends ConfigTabContent {
             return ascending ? result : -result;
         });
         return list;
+    }
+
+    private int latencyGroup(ScoreboardSyncPacket.Entry entry) {
+        return entry.online ? 0 : entry.offlineDurationMillis >= 0L ? 1 : 2;
+    }
+
+    private long latencySortValue(ScoreboardSyncPacket.Entry entry) {
+        return entry.online ? resolvePing(entry) : entry.offlineDurationMillis;
     }
 
     private List<GDTextRenderer.ColoredText> getPanelTeamInfo(int panelIndex) {

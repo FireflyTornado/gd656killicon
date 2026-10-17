@@ -100,6 +100,9 @@ public class HelpTab extends ConfigTabContent {
                 addIndentedHelpEntry("gd656killicon.client.gui.help.command.config.combowindow.title", "gd656killicon.client.gui.help.command.config.combowindow.desc", contentWidth);
                 addIndentedHelpEntry("gd656killicon.client.gui.help.command.config.scoremaxlimit.title", "gd656killicon.client.gui.help.command.config.scoremaxlimit.desc", contentWidth);
                 addIndentedHelpEntry("gd656killicon.client.gui.help.command.config.displayname.title", "gd656killicon.client.gui.help.command.config.displayname.desc", contentWidth);
+                addIndentedHelpEntry("gd656killicon.client.gui.help.command.config.player_filter_enabled.title", "gd656killicon.client.gui.help.command.config.player_filter_enabled.desc", contentWidth);
+                addIndentedHelpEntry("gd656killicon.client.gui.help.command.config.player_filter_days.title", "gd656killicon.client.gui.help.command.config.player_filter_days.desc", contentWidth);
+                addIndentedHelpEntry("gd656killicon.client.gui.help.command.config.unknown_player_retention_days.title", "gd656killicon.client.gui.help.command.config.unknown_player_retention_days.desc", contentWidth);
             }
 
             addSubCategoryHeader("gd656killicon.client.gui.help.command.category.statistics", isCommandStatisticsExpanded, (btn) -> {

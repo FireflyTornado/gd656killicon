@@ -113,6 +113,7 @@ public final class ServerCombatEngine {
 
     public static void onStopping(MinecraftServer server) {
         ServerLog.info("Saving server data...");
+        PlayerDataManager.get().recordOnlinePlayers(server);
         ServerData.get().saveAll();
         ServerData.get().shutdown();
         PlayerDataManager.get().shutdown();
@@ -135,6 +136,7 @@ public final class ServerCombatEngine {
 
         long now = System.currentTimeMillis();
         PlayerDataManager.get().tickScoreboardSnapshots(now);
+        PlayerDataManager.get().tickPlayerPresence(server);
         tickScoreboardRefresh(server, now);
         activeCombats.values().forEach(map -> map.values().removeIf(cs -> now - cs.lastInteractionTime > 30000));
         activeCombats.values().removeIf(Map::isEmpty);
@@ -165,6 +167,7 @@ public final class ServerCombatEngine {
 
     public static void onPlayerJoin(ServerPlayer player) {
         if (player == null) return;
+        PlayerDataManager.get().recordPlayerLastOnline(player.getUUID());
         PlayerDataManager.get().updateLastLoginName(player.getUUID(), player.getScoreboardName());
         ServerData.get().syncScoreToPlayer(player);
         lastSelectedSlot.put(player.getUUID(), player.getInventory().selected);
@@ -174,6 +177,7 @@ public final class ServerCombatEngine {
     public static void onPlayerLogout(ServerPlayer player) {
         if (player == null) return;
         UUID playerId = player.getUUID();
+        PlayerDataManager.get().recordPlayerLastOnline(playerId);
         PlayerDataManager.get().clearScoreboardSnapshot(playerId);
         PlayerDataManager.get().forceSave(playerId);
         lastSprintPositions.remove(playerId);

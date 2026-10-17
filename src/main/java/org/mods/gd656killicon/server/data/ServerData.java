@@ -55,6 +55,9 @@ public class ServerData {
     private String assistboardDisplayName = DEFAULT_ASSISTBOARD_DISPLAY_NAME;
     private String reviveboardDisplayName = DEFAULT_REVIVEBOARD_DISPLAY_NAME;
     private boolean neutralVehicleSkip = true;
+    private boolean playerFilterEnabled = true;
+    private int playerFilterDays = 30;
+    private int unknownPlayerRetentionDays = 5;
     private final Set<Integer> disabledBonusTypes = ConcurrentHashMap.newKeySet();
     private final Map<Integer, String> bonusExpressions = new ConcurrentHashMap<>();
 
@@ -88,6 +91,7 @@ public class ServerData {
         PlayerDataManager.get().init(server);
         initScoreboard(server);
         loaded = true;
+        saveConfig();
     }
 
     public void shutdown() {
@@ -99,6 +103,9 @@ public class ServerData {
 
     public void saveAll() {
         if (!loaded) return;
+        if (reloadPlayerFilterConfig()) {
+            PlayerDataManager.get().onPlayerFilterConfigChanged();
+        }
         saveConfig();
         PlayerDataManager.get().forceSave();
     }
@@ -113,6 +120,53 @@ public class ServerData {
 
     public int getScoreMaxLimit() { return scoreMaxLimit; }
     public void setScoreMaxLimit(int val) { this.scoreMaxLimit = Math.max(0, val); saveConfig(); }
+
+    public boolean isPlayerFilterEnabled() { return playerFilterEnabled; }
+    public int getPlayerFilterDays() { return playerFilterDays; }
+    public int getUnknownPlayerRetentionDays() { return unknownPlayerRetentionDays; }
+
+    public void setPlayerFilterEnabled(boolean value) {
+        playerFilterEnabled = value;
+        playerFilterChanged();
+    }
+
+    public void setPlayerFilterDays(int value) {
+        playerFilterDays = Math.max(1, value);
+        playerFilterChanged();
+    }
+
+    public void setUnknownPlayerRetentionDays(int value) {
+        unknownPlayerRetentionDays = Math.max(1, value);
+        playerFilterChanged();
+    }
+
+    private void playerFilterChanged() {
+        saveConfig();
+        PlayerDataManager.get().onPlayerFilterConfigChanged();
+    }
+
+    /** Poll only presence settings; other server configuration keeps its existing lifecycle. */
+    public boolean reloadPlayerFilterConfig() {
+        if (configPath == null || !Files.exists(configPath)) {
+            return false;
+        }
+        try {
+            JsonObject json = JsonParser.parseString(Files.readString(configPath, StandardCharsets.UTF_8)).getAsJsonObject();
+            boolean enabled = json.has("player_filter_enabled") ? json.get("player_filter_enabled").getAsBoolean() : true;
+            int days = json.has("player_filter_days") ? Math.max(1, json.get("player_filter_days").getAsInt()) : 30;
+            int unknownDays = json.has("unknown_player_retention_days") ? Math.max(1, json.get("unknown_player_retention_days").getAsInt()) : 5;
+            if (enabled == playerFilterEnabled && days == playerFilterDays && unknownDays == unknownPlayerRetentionDays) {
+                return false;
+            }
+            playerFilterEnabled = enabled;
+            playerFilterDays = days;
+            unknownPlayerRetentionDays = unknownDays;
+            return true;
+        } catch (Exception exception) {
+            ServerLog.error("Failed to reload player filter settings: %s", exception.getMessage());
+            return false;
+        }
+    }
 
     public String getScoreboardDisplayName() { return scoreboardDisplayName; }
 
@@ -234,6 +288,9 @@ public class ServerData {
     }
 
     public void resetConfig() {
+        playerFilterEnabled = true;
+        playerFilterDays = 30;
+        unknownPlayerRetentionDays = 5;
         comboWindowSeconds = DEFAULT_COMBO_WINDOW_SECONDS;
         assistTimeoutSeconds = DEFAULT_ASSIST_TIMEOUT_SECONDS;
         scoreMaxLimit = DEFAULT_SCORE_MAX_LIMIT;
@@ -247,6 +304,7 @@ public class ServerData {
         resetDisabledBonusTypes();
         bonusExpressions.clear();
         saveConfig();
+        PlayerDataManager.get().onPlayerFilterConfigChanged();
     }
     
     public void resetBonusConfig() {
@@ -257,6 +315,9 @@ public class ServerData {
     }
 
     private void applyDefaults() {
+        playerFilterEnabled = true;
+        playerFilterDays = 30;
+        unknownPlayerRetentionDays = 5;
         comboWindowSeconds = DEFAULT_COMBO_WINDOW_SECONDS;
         assistTimeoutSeconds = DEFAULT_ASSIST_TIMEOUT_SECONDS;
         scoreMaxLimit = DEFAULT_SCORE_MAX_LIMIT;
@@ -694,6 +755,9 @@ public class ServerData {
                 if (json.has("combo_window")) comboWindowSeconds = json.get("combo_window").getAsDouble();
                 if (json.has("assist_timeout")) assistTimeoutSeconds = json.get("assist_timeout").getAsInt();
                 if (json.has("max_limit")) scoreMaxLimit = json.get("max_limit").getAsInt();
+                if (json.has("player_filter_enabled")) playerFilterEnabled = json.get("player_filter_enabled").getAsBoolean();
+                if (json.has("player_filter_days")) playerFilterDays = Math.max(1, json.get("player_filter_days").getAsInt());
+                if (json.has("unknown_player_retention_days")) unknownPlayerRetentionDays = Math.max(1, json.get("unknown_player_retention_days").getAsInt());
             if (json.has("scoreboard_display_name")) scoreboardDisplayName = json.get("scoreboard_display_name").getAsString();
             if (json.has("killboard_display_name")) killboardDisplayName = json.get("killboard_display_name").getAsString();
             if (json.has("deathboard_display_name")) deathboardDisplayName = json.get("deathboard_display_name").getAsString();
@@ -728,6 +792,9 @@ public class ServerData {
             json.addProperty("combo_window", comboWindowSeconds);
             json.addProperty("assist_timeout", assistTimeoutSeconds);
             json.addProperty("max_limit", scoreMaxLimit);
+            json.addProperty("player_filter_enabled", playerFilterEnabled);
+            json.addProperty("player_filter_days", playerFilterDays);
+            json.addProperty("unknown_player_retention_days", unknownPlayerRetentionDays);
         json.addProperty("scoreboard_display_name", scoreboardDisplayName);
         json.addProperty("killboard_display_name", killboardDisplayName);
         json.addProperty("deathboard_display_name", deathboardDisplayName);

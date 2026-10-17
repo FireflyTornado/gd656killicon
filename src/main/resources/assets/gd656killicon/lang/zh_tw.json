@@ -1576,5 +1576,14 @@
   "gd656killicon.server.prefix": "[六五六-服務端] ",
   "key.categories.gd656killicon": "GD656Killicon",
   "key.gd656killicon.open_config": "開啟配置",
-  "key.gd656killicon.open_scoreboard": "檢視計分板"
+  "key.gd656killicon.open_scoreboard": "檢視計分板",
+  "gd656killicon.client.gui.help.command.config.player_filter_enabled.title": "玩家篩選開關",
+  "gd656killicon.client.gui.help.command.config.player_filter_enabled.desc": "/gd656killicon server config PlayerFilterEnabled <true|false>\n啟用或停用總榜離線玩家篩選，預設啟用。",
+  "gd656killicon.server.command.player_filter_enabled_set": "已設定玩家篩選開關為: %s",
+  "gd656killicon.client.gui.help.command.config.player_filter_days.title": "玩家篩選時長",
+  "gd656killicon.client.gui.help.command.config.player_filter_days.desc": "/gd656killicon server config PlayerFilterDays <days>\n設定已知離線玩家的篩選時長，預設30天；僅隱藏，不刪除資料。",
+  "gd656killicon.server.command.player_filter_days_set": "已設定玩家篩選時長為: %s d",
+  "gd656killicon.client.gui.help.command.config.unknown_player_retention_days.title": "未知玩家保留時長",
+  "gd656killicon.client.gui.help.command.config.unknown_player_retention_days.desc": "/gd656killicon server config UnknownPlayerRetentionDays <days>\n設定未知玩家保留天數，預設5天；數值變更時重新開始所有未知玩家的保留期。",
+  "gd656killicon.server.command.unknown_player_retention_days_set": "已設定未知玩家保留時長為: %s d，未知玩家保留期已視需要重新計算"
 }
