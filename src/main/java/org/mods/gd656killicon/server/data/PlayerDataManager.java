@@ -32,7 +32,10 @@ public class PlayerDataManager {
     private static final String PLAYERDATA_DIR = "playerdata";
     private static final long AUTO_SAVE_INTERVAL_MINUTES = 5;
     private static final int SCOREBOARD_PAGE_LIMIT_MAX = 100;
-    private final ScoreboardSnapshotStore<ResolvedScoreboardData> scoreboardSnapshots = new ScoreboardSnapshotStore<>(60_000L);
+    private static final int SCOREBOARD_SNAPSHOT_LIMIT = 64;
+    private static final long SCOREBOARD_SNAPSHOT_CLEANUP_INTERVAL_MS = 1_000L;
+    private final ScoreboardSnapshotStore<ResolvedScoreboardData> scoreboardSnapshots = new ScoreboardSnapshotStore<>(60_000L, SCOREBOARD_SNAPSHOT_LIMIT);
+    private long nextScoreboardSnapshotCleanupAt;
     private static final String[] DEFAULT_PANEL_TEAMS = new String[]{"", "", "", ""};
     private final Map<UUID, PlayerData> playerDataCache;
     /** 每 honor 全服最高累计次数(内存缓存, 不落盘; 启动时从所有玩家 playerdata 构建, recordHonor 时更新)。 */
@@ -80,6 +83,7 @@ public class PlayerDataManager {
 
     public void shutdown() {
         scoreboardSnapshots.clear();
+        nextScoreboardSnapshotCleanupAt = 0L;
         if (autoSaveExecutor != null) {
             autoSaveExecutor.shutdown();
             try {
@@ -545,7 +549,7 @@ public class PlayerDataManager {
         }
         long now = System.currentTimeMillis();
         ScoreboardSnapshotStore.Snapshot<ResolvedScoreboardData> snapshot = snapshotId == 0L && offset == 0
-            ? scoreboardSnapshots.create(player.getUUID(), resolveScoreboardData(player), now)
+            ? scoreboardSnapshots.create(player.getUUID(), () -> resolveScoreboardData(player), now)
             : scoreboardSnapshots.get(player.getUUID(), snapshotId, now);
         if (snapshot == null) {
             NetworkHandler.sendToPlayer(new ScoreboardSyncPacket(List.of(), offset, 0, requestId,
@@ -568,6 +572,17 @@ public class PlayerDataManager {
             resolved.columns(),
             resolved.panelTeams()
         ), player);
+        if (nextOffset >= resolved.entries().size()) {
+            scoreboardSnapshots.remove(player.getUUID());
+        }
+    }
+
+    /** Called by the server tick even when no player is requesting the scoreboard. */
+    public void tickScoreboardSnapshots(long now) {
+        if (now >= nextScoreboardSnapshotCleanupAt) {
+            scoreboardSnapshots.cleanupExpired(now);
+            nextScoreboardSnapshotCleanupAt = now + SCOREBOARD_SNAPSHOT_CLEANUP_INTERVAL_MS;
+        }
     }
 
     public void clearScoreboardSnapshot(UUID playerId) {
